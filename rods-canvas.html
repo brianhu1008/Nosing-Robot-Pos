@@ -94,12 +94,13 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #
   </div>
 
   <div class="dist-panel">
-    <h3>&#128208; 距離 (nosing - Robot)</h3>
+    <h3>&#128208; 距離 (Robot - nosing gap)</h3>
     <div class="dist-row"><span class="label">comp Y 分量</span><span class="value" style="color:#4fc3f7;" id="distCompY">0.000 mm</span></div>
     <div class="dist-row"><span class="label">inlet Y 分量</span><span class="value" style="color:#ff8a65;" id="distInletY">0.000 mm</span></div>
     <div class="dist-row"><span class="label">Comp玻璃距離nosing gap為</span><span class="value" style="color:#ffd54f;" id="distCompE">0.000 mm</span></div>
     <div class="dist-row"><span class="label">Inlet玻璃距離nosing gap為</span><span class="value" style="color:#ffd54f;" id="distInletE">0.000 mm</span></div>
   </div>
+  <div id="bindingWarn" style="display:none;color:#e94560;font-weight:bold;font-size:18px;text-align:center;padding:10px;background:rgba(233,69,96,0.12);border:3px solid #e94560;border-radius:6px;margin-top:8px;">⚠️ BINDING ⚠️</div>
 
   <div class="legend">
     <span class="legend-item"><span class="legend-dot" style="background:#4fc3f7;"></span> Robot</span>
@@ -206,13 +207,15 @@ function renderTopView() {
   const r2c = { x: -h, y: r2.c };
   const r2i = { x: r2c.x + L, y: r2c.y + r2.i };
 
-  const dCY = r2c.y - r1c.y, dIY = r2i.y - r1i.y;
-  const dCE = Math.hypot(r2c.x-r1c.x, r2c.y-r1c.y);
-  const dIE = Math.hypot(r2i.x-r1i.x, r2i.y-r1i.y);
+  const dCY = r1c.y - r2c.y, dIY = r1i.y - r2i.y;
+  const dCE = Math.sign(dCY) * Math.hypot(r2c.x-r1c.x, r2c.y-r1c.y);
+  const dIE = Math.sign(dIY) * Math.hypot(r2i.x-r1i.x, r2i.y-r1i.y);
   DE.cY.textContent = (dCY>=0?'+':'')+dCY.toFixed(3)+' mm';
   DE.iY.textContent = (dIY>=0?'+':'')+dIY.toFixed(3)+' mm';
-  DE.cE.textContent = dCE.toFixed(3)+' mm';
-  DE.iE.textContent = dIE.toFixed(3)+' mm';
+  DE.cE.textContent = (dCE>=0?'+':'')+dCE.toFixed(3)+' mm';
+  DE.iE.textContent = (dIE>=0?'+':'')+dIE.toFixed(3)+' mm';
+  const warn = document.getElementById('bindingWarn');
+  if (dCY < 0 || dIY < 0) { warn.style.display = 'block'; } else { warn.style.display = 'none'; }
 
   const pts = [r1c, r1i, r2c, r2i];
   let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
@@ -291,13 +294,15 @@ function renderSideView() {
   const r1i = { x: h*ca1, y: r1.f + h*sa1 };
   const r2c = { x: -h, y: r2.c };
   const r2i = { x: h, y: r2.c + r2.i };
-  const dCY = r2c.y - r1c.y, dIY = r2i.y - r1i.y;
-  const dCE = Math.hypot(r2c.x-r1c.x, r2c.y-r1c.y);
-  const dIE = Math.hypot(r2i.x-r1i.x, r2i.y-r1i.y);
+  const dCY = r1c.y - r2c.y, dIY = r1i.y - r2i.y;
+  const dCE = Math.sign(dCY) * Math.hypot(r2c.x-r1c.x, r2c.y-r1c.y);
+  const dIE = Math.sign(dIY) * Math.hypot(r2i.x-r1i.x, r2i.y-r1i.y);
   DE.cY.textContent = (dCY>=0?'+':'')+dCY.toFixed(3)+' mm';
   DE.iY.textContent = (dIY>=0?'+':'')+dIY.toFixed(3)+' mm';
-  DE.cE.textContent = dCE.toFixed(3)+' mm';
-  DE.iE.textContent = dIE.toFixed(3)+' mm';
+  DE.cE.textContent = (dCE>=0?'+':'')+dCE.toFixed(3)+' mm';
+  DE.iE.textContent = (dIE>=0?'+':'')+dIE.toFixed(3)+' mm';
+  const warn = document.getElementById('bindingWarn');
+  if (dCY < 0 || dIY < 0) { warn.style.display = 'block'; } else { warn.style.display = 'none'; }
 
   ctx.clearRect(0,0,W,H);
   const midX = Math.floor(W/2);
