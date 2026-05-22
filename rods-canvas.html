@@ -112,6 +112,7 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #
     <button class="btn-reset" id="resetAllBtn">全部歸零</button>
     <button class="btn-reset s" id="resetRobotBtn">Robot歸零</button>
     <button class="btn-reset s" id="resetNosingBtn">nosing歸零</button>
+    <button class="btn-reset s" id="resetViewBtn">重置視野</button>
   </div>
   <div class="hint">雙擊數字可單項歸零 &middot; &#8593;&#8595; Y(前後) &middot; &#8592;&#8594; X(左右)</div>
 </div>
@@ -532,6 +533,9 @@ document.getElementById('resetRobotBtn').addEventListener('click', () => {
 });
 document.getElementById('resetNosingBtn').addEventListener('click', () => {
   r2Ids.forEach(id => { S[id].value = 0; D[id].value = 0; }); compute();
+});
+document.getElementById('resetViewBtn').addEventListener('click', () => {
+  panX = 0; panY = 0; mag_inp.value = 5; compute();
 });
 
 setTimeout(resize, 50);
