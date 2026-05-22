@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Robot x Nosing 位置視覺化</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
+#sidebar { width: 360px; min-width: 360px; background: #16213e; padding: 16px; overflow-y: auto; border-right: 2px solid #0f3460; display: flex; flex-direction: column; gap: 10px; }
+#sidebar h2 { font-size: 18px; color: #e94560; border-bottom: 2px solid #e94560; padding-bottom: 8px; }
+.rod-panel { background: #1a1a3e; border-radius: 8px; padding: 12px; border-left: 3px solid; }
+.rod-panel.r1 { border-left-color: #4fc3f7; }
+.rod-panel.r2 { border-left-color: #ff8a65; }
+.param-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.param-row label { font-size: 12px; color: #8892b0; width: 72px; flex-shrink: 0; }
+.param-row input[type="range"] { flex: 1; height: 4px; accent-color: #e94560; cursor: pointer; }
+.param-row .val { font-size: 12px; color: #ccd6f6; width: 70px; text-align: right; font-family: monospace; cursor: pointer; background: #0a0a2e; border: 1px solid #333; border-radius: 4px; padding: 2px 6px; }
+.param-row .val:focus { outline: none; border-color: #e94560; }
+.param-row .val:hover { border-color: #e94560; }
+/* hide number spinners */
+.param-row .val::-webkit-outer-spin-button,
+.param-row .val::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.param-row .val[type="number"] { -moz-appearance: textfield; }
+.dist-panel { background: #0f3460; border-radius: 8px; padding: 12px; }
+.dist-panel h3 { color: #e94560; margin-bottom: 8px; }
+.dist-row { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid #1a1a4e; font-size: 13px; }
+.dist-row:last-child { border-bottom: none; }
+.dist-row .label { color: #8892b0; }
+#canvasWrap { flex: 1; display: flex; align-items: center; justify-content: center; background: #0a0a1a; position: relative; }
+#canvasWrap canvas { display: block; cursor: grab; }
+#canvasWrap canvas.panning { cursor: grabbing; }
+.l-ref-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.l-ref-row label { font-size: 12px; color: #8892b0; width: 72px; }
+.l-ref-row input[type="number"] { flex: 1; background: #0a0a2e; border: 1px solid #333; color: #ccd6f6; padding: 4px 8px; border-radius: 4px; font-family: monospace; }
+.l-ref-row input[type="number"]:focus { outline: none; border-color: #e94560; }
+.l-ref-row input[type="range"] { flex: 1; height: 4px; accent-color: #e94560; cursor: pointer; }
+.btn-row { display: flex; gap: 8px; }
+.btn-reset { background: #e94560; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; flex: 1; }
+.btn-reset:hover { background: #ff6b81; }
+.btn-reset.s { background: #333; }
+.btn-reset.s:hover { background: #555; }
+.legend { display: flex; gap: 12px; font-size: 12px; color: #8892b0; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 4px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.hint { font-size: 11px; color: #555; text-align: center; padding: 4px; }
+.tab-bar { display: flex; border-radius: 6px; overflow: hidden; border: 1px solid #333; }
+.tab-btn { flex: 1; padding: 6px 0; text-align: center; font-size: 13px; cursor: pointer; background: #0a0a2e; color: #8892b0; border: none; transition: all 0.2s; }
+.tab-btn.active { background: #e94560; color: #fff; }
+.tab-btn:hover:not(.active) { background: #1a1a4e; }
+.side-only { display: none; }
+.side-only.show { display: flex; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="tab-bar" id="tabBar">
+    <button class="tab-btn active" data-tab="top">上視圖</button>
+    <button class="tab-btn" data-tab="side">側視圖</button>
+  </div>
+  <div class="l-ref-row">
+    <label>玻璃OSW</label>
+    <input type="number" id="rodLength" value="2864" step="0.1" min="1">
+    <span style="font-size:11px;color:#8892b0;">mm</span>
+  </div>
+  <div class="l-ref-row">
+    <label>顯示倍率</label>
+    <input type="range" id="mag" min="1" max="20" value="5" step="0.5">
+    <span class="val" id="magVal" style="font-size:12px;color:#ccd6f6;width:36px;text-align:right;font-family:monospace;">5.0</span>
+    <span style="font-size:11px;color:#8892b0;">x</span>
+  </div>
+  <div class="l-ref-row side-only" id="sideParams">
+    <label>棒材直徑</label>
+    <input type="number" id="rodDia" value="60" step="1" min="5" max="500">
+    <span style="font-size:11px;color:#8892b0;">mm</span>
+  </div>
+  <div class="l-ref-row side-only" id="sideParamsGap">
+    <label>Z軸間距</label>
+    <input type="number" id="zGap" value="150" step="1" min="5" max="1000">
+    <span style="font-size:11px;color:#8892b0;">mm</span>
+  </div>
+
+  <div class="rod-panel r1">
+    <h3>Robot (藍) <span style="font-size:10px;color:#8892b0;">— 無 comp/inlet 偏移</span></h3>
+    <div class="param-row"><label>前後位置</label><input type="range" id="r1fb" min="-100" max="100" value="0" step="0.1"><input class="val" id="r1fbVal" type="number" step="0.1"></div>
+    <div class="param-row"><label>turn (&deg;)</label><input type="range" id="r1turn" min="-5" max="5" value="0" step="0.001"><input class="val" id="r1turnVal" type="number" step="0.001"></div>
+  </div>
+
+  <div class="rod-panel r2">
+    <h3>nosing (橙) <span style="font-size:10px;color:#8892b0;">— comp/inlet 為前後(Y)偏移</span></h3>
+    <div class="param-row"><label>comp (左Y)</label><input type="range" id="r2comp" min="-100" max="100" value="0" step="0.1"><input class="val" id="r2compVal" type="number" step="0.1"></div>
+    <div class="param-row"><label>inlet (右Y)</label><input type="range" id="r2inlet" min="-100" max="100" value="0" step="0.1"><input class="val" id="r2inletVal" type="number" step="0.1"></div>
+  </div>
+
+  <div class="dist-panel">
+    <h3>&#128208; 距離 (nosing - Robot)</h3>
+    <div class="dist-row"><span class="label">comp Y 分量</span><span class="value" style="color:#4fc3f7;" id="distCompY">0.000 mm</span></div>
+    <div class="dist-row"><span class="label">inlet Y 分量</span><span class="value" style="color:#ff8a65;" id="distInletY">0.000 mm</span></div>
+    <div class="dist-row"><span class="label">comp 總距離</span><span class="value" style="color:#ffd54f;" id="distCompE">0.000 mm</span></div>
+    <div class="dist-row"><span class="label">inlet 總距離</span><span class="value" style="color:#ffd54f;" id="distInletE">0.000 mm</span></div>
+  </div>
+
+  <div class="legend">
+    <span class="legend-item"><span class="legend-dot" style="background:#4fc3f7;"></span> Robot</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#ff8a65;"></span> nosing</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#f06292;"></span> comp端</span>
+    <span class="legend-item"><span class="legend-dot" style="background:#66bb6a;"></span> inlet端</span>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-reset" id="resetAllBtn">全部歸零</button>
+    <button class="btn-reset s" id="resetRobotBtn">Robot歸零</button>
+    <button class="btn-reset s" id="resetNosingBtn">nosing歸零</button>
+  </div>
+  <div class="hint">雙擊數字可單項歸零 &middot; &#8593;&#8595; Y(前後) &middot; &#8592;&#8594; X(左右)</div>
+</div>
+
+<div id="canvasWrap">
+  <canvas id="cv"></canvas>
+</div>
+
+<script>
+const L_inp = document.getElementById('rodLength');
+const mag_inp = document.getElementById('mag');
+const magDisp = document.getElementById('magVal');
+const r1Ids = ['r1fb','r1turn'];
+const r2Ids = ['r2comp','r2inlet'];
+const allIds = r1Ids.concat(r2Ids);
+const S = {}, D = {};
+allIds.forEach(id => { S[id] = document.getElementById(id); D[id] = document.getElementById(id+'Val'); });
+const DE = {
+  cY: document.getElementById('distCompY'), iY: document.getElementById('distInletY'),
+  cE: document.getElementById('distCompE'), iE: document.getElementById('distInletE'),
+};
+const hint = document.querySelector('.hint');
+const legend = document.querySelector('.legend');
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+let W, H, scale, originX, originY;
+let panX = 0, panY = 0, panStartX, panStartY, panStartOX, panStartOY;
+let isPanning = false;
+let currentTab = 'top';
+const dia_inp = document.getElementById('rodDia');
+const gap_inp = document.getElementById('zGap');
+
+function resize() {
+  const wrap = document.getElementById('canvasWrap');
+  W = wrap.clientWidth; H = wrap.clientHeight;
+  cv.width = W; cv.height = H;
+  compute();
+}
+window.addEventListener('resize', resize);
+
+// Pan with middle mouse button
+cv.addEventListener('mousedown', (e) => {
+  if (e.button === 1) {
+    isPanning = true;
+    panStartX = e.clientX; panStartY = e.clientY;
+    panStartOX = panX; panStartOY = panY;
+    cv.classList.add('panning');
+    e.preventDefault();
+  }
+});
+window.addEventListener('mousemove', (e) => {
+  if (isPanning) {
+    panX = panStartOX + (e.clientX - panStartX);
+    panY = panStartOY + (e.clientY - panStartY);
+    compute();
+  }
+});
+window.addEventListener('mouseup', (e) => {
+  if (e.button === 1) {
+    isPanning = false;
+    cv.classList.remove('panning');
+  }
+});
+
+// Scroll wheel zoom
+cv.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  let v = parseFloat(mag_inp.value);
+  v += e.deltaY < 0 ? 0.5 : -0.5;
+  v = Math.max(1, Math.min(20, v));
+  mag_inp.value = v;
+  compute();
+}, { passive: false });
+
+function d2r(d) { return d * Math.PI / 180; }
+
+function renderTopView() {
+  const L = parseFloat(L_inp.value) || 2864;
+  const h = L / 2;
+  const r1 = { f:+S.r1fb.value, t:+S.r1turn.value };
+  const r2 = { c:+S.r2comp.value, i:+S.r2inlet.value };
+  const mag = parseFloat(mag_inp.value) || 1;
+
+  const r1cN = { x: -h, y: r1.f };
+  const r1iN = { x:  h, y: r1.f };
+  const r1m = { x: 0, y: r1.f };
+  const a1 = d2r(r1.t), ca1=Math.cos(a1), sa1=Math.sin(a1);
+  const r1c = { x: r1m.x+(r1cN.x-r1m.x)*ca1-(r1cN.y-r1m.y)*sa1, y: r1m.y+(r1cN.x-r1m.x)*sa1+(r1cN.y-r1m.y)*ca1 };
+  const r1i = { x: r1m.x+(r1iN.x-r1m.x)*ca1-(r1iN.y-r1m.y)*sa1, y: r1m.y+(r1iN.x-r1m.x)*sa1+(r1iN.y-r1m.y)*ca1 };
+  const r2c = { x: -h, y: r2.c };
+  const r2i = { x: r2c.x + L, y: r2c.y + r2.i };
+
+  const dCY = r2c.y - r1c.y, dIY = r2i.y - r1i.y;
+  const dCE = Math.hypot(r2c.x-r1c.x, r2c.y-r1c.y);
+  const dIE = Math.hypot(r2i.x-r1i.x, r2i.y-r1i.y);
+  DE.cY.textContent = (dCY>=0?'+':'')+dCY.toFixed(3)+' mm';
+  DE.iY.textContent = (dIY>=0?'+':'')+dIY.toFixed(3)+' mm';
+  DE.cE.textContent = dCE.toFixed(3)+' mm';
+  DE.iE.textContent = dIE.toFixed(3)+' mm';
+
+  const pts = [r1c, r1i, r2c, r2i];
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  pts.forEach(p => { if(p.x<minX)minX=p.x; if(p.x>maxX)maxX=p.x; if(p.y<minY)minY=p.y; if(p.y>maxY)maxY=p.y; });
+  const pad = L * 0.3;
+  minX-=pad; maxX+=pad; minY-=pad; maxY+=pad;
+  const rangeX=maxX-minX||1, rangeY=maxY-minY||1;
+  const margin=60;
+  const availW=W-2*margin, availH=H-2*margin;
+  const baseScale = Math.min(availW/rangeX, availH/rangeY);
+  scale = baseScale * mag;
+  const cx = (minX+maxX)/2, cy = (minY+maxY)/2;
+  originX = W/2 - cx * scale;
+  originY = H/2 + cy * scale;
+
+  ctx.clearRect(0,0,W,H);
+
+  const gs = L/4;
+  ctx.strokeStyle='#1a1a3a'; ctx.lineWidth=1;
+  const gMinX=Math.floor(minX/gs)*gs, gMaxX=Math.ceil(maxX/gs)*gs;
+  const gMinY=Math.floor(minY/gs)*gs, gMaxY=Math.ceil(maxY/gs)*gs;
+  for(let x=gMinX;x<=gMaxX;x+=gs){ctx.beginPath();ctx.moveTo(originX+x*scale+panX,0);ctx.lineTo(originX+x*scale+panX,H);ctx.stroke();}
+  for(let y=gMinY;y<=gMaxY;y+=gs){ctx.beginPath();ctx.moveTo(0,originY-y*scale+panY);ctx.lineTo(W,originY-y*scale+panY);ctx.stroke();}
+
+  ctx.fillStyle='#555'; ctx.font='12px monospace'; ctx.textAlign='center';
+  ctx.fillText('X (左右)', W/2, H-8);
+  ctx.save(); ctx.translate(14, H/2); ctx.rotate(-Math.PI/2); ctx.fillText('Y (前後 → +)', 0, 0); ctx.restore();
+
+  function toSX(x){return originX+x*scale+panX;}
+  function toSY(y){return originY-y*scale+panY;}
+
+  function drawSeg(p1,p2,clr){
+    const x1=toSX(p1.x),y1=toSY(p1.y),x2=toSX(p2.x),y2=toSY(p2.y);
+    ctx.strokeStyle=clr; ctx.lineWidth=5; ctx.globalAlpha=0.8;
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();ctx.globalAlpha=1;
+    ctx.fillStyle='#f06292';ctx.beginPath();ctx.arc(x1,y1,7,0,2*Math.PI);ctx.fill();
+    ctx.fillStyle='#66bb6a';ctx.beginPath();ctx.arc(x2,y2,7,0,2*Math.PI);ctx.fill();
+  }
+  drawSeg(r1c,r1i,'#4fc3f7');
+  drawSeg(r2c,r2i,'#ff8a65');
+
+  ctx.setLineDash([6,5]); ctx.lineWidth=1.5;
+  ctx.strokeStyle='#4fc3f7'; ctx.globalAlpha=0.5;
+  ctx.beginPath();ctx.moveTo(toSX(r1c.x),toSY(r1c.y));ctx.lineTo(toSX(r2c.x),toSY(r2c.y));ctx.stroke();
+  ctx.strokeStyle='#ff8a65'; ctx.globalAlpha=0.5;
+  ctx.beginPath();ctx.moveTo(toSX(r1i.x),toSY(r1i.y));ctx.lineTo(toSX(r2i.x),toSY(r2i.y));ctx.stroke();
+  ctx.setLineDash([]); ctx.globalAlpha=1;
+
+  ctx.font='bold 12px Arial'; ctx.textAlign='center';
+  ctx.fillStyle='#4fc3f7';
+  ctx.textBaseline='bottom'; ctx.fillText('Robot comp',toSX(r1c.x),toSY(r1c.y)-20);
+  ctx.textBaseline='bottom'; ctx.fillText('Robot inlet',toSX(r1i.x),toSY(r1i.y)-20);
+  ctx.fillStyle='#ff8a65';
+  ctx.textBaseline='top'; ctx.fillText('nosing comp',toSX(r2c.x),toSY(r2c.y)+22);
+  ctx.textBaseline='top'; ctx.fillText('nosing inlet',toSX(r2i.x),toSY(r2i.y)+22);
+
+  ctx.font='11px monospace'; ctx.textAlign='center'; ctx.textBaseline='bottom';
+  ctx.fillStyle='#ffd54f';
+  ctx.fillText(dCE.toFixed(2)+'mm',(toSX(r1c.x)+toSX(r2c.x))/2,(toSY(r1c.y)+toSY(r2c.y))/2-4);
+  ctx.fillText(dIE.toFixed(2)+'mm',(toSX(r1i.x)+toSX(r2i.x))/2,(toSY(r1i.y)+toSY(r2i.y))/2-4);
+}
+
+function renderSideView() {
+  const L = parseFloat(L_inp.value) || 2864;
+  const h = L / 2;
+  const r1 = { f:+S.r1fb.value, t:+S.r1turn.value };
+  const r2 = { c:+S.r2comp.value, i:+S.r2inlet.value };
+  const mag = parseFloat(mag_inp.value) || 1;
+  const D = parseFloat(dia_inp.value) || 60;
+  const gap = parseFloat(gap_inp.value) || 150;
+  const a1 = d2r(r1.t), ca1=Math.cos(a1), sa1=Math.sin(a1);
+  const r1_cy = r1.f;
+  const r2i_y = r2.c + r2.i;
+  const inletY = r1_cy + h * sa1;
+  const r1c = { x: -h*ca1, y: r1.f - h*sa1 };
+  const r1i = { x: h*ca1, y: r1.f + h*sa1 };
+  const r2c = { x: -h, y: r2.c };
+  const r2i = { x: h, y: r2.c + r2.i };
+  const dCY = r2c.y - r1c.y, dIY = r2i.y - r1i.y;
+  const dCE = Math.hypot(r2c.x-r1c.x, r2c.y-r1c.y);
+  const dIE = Math.hypot(r2i.x-r1i.x, r2i.y-r1i.y);
+  DE.cY.textContent = (dCY>=0?'+':'')+dCY.toFixed(3)+' mm';
+  DE.iY.textContent = (dIY>=0?'+':'')+dIY.toFixed(3)+' mm';
+  DE.cE.textContent = dCE.toFixed(3)+' mm';
+  DE.iE.textContent = dIE.toFixed(3)+' mm';
+
+  ctx.clearRect(0,0,W,H);
+  const midX = Math.floor(W/2);
+  ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(midX, 0); ctx.lineTo(midX, H); ctx.stroke();
+  ctx.font='12px Arial'; ctx.fillStyle='#667'; ctx.textAlign='center'; ctx.textBaseline='top';
+  ctx.fillText('Y-Z 側視 (前後方向)', midX/2, 2);
+  ctx.fillText('Y-Z 側視 (comp方向)', midX+midX/2, 2);
+
+  // === Y-Z panel (left half) ===
+  renderYZPanel(0, 0, midX-3, H);
+  // === X-Z panel (right half) ===
+  renderXZPanel(midX+3, 0, W-midX-3, H);
+
+  function renderYZPanel(vx, vy, vw, vh) {
+    const margin = 36;
+    const yRange = L * 0.4 + D;
+    const minY = -yRange, maxY = yRange;
+    let minZ = Math.min(-D/2, 0), maxZ = Math.max(gap + D/2, 0);
+    const zPad = L * 0.04;
+    minZ -= zPad; maxZ += zPad;
+    const baseScale = Math.min((vw-2*margin)/(maxY-minY||1), (vh-2*margin)/(maxZ-minZ||1));
+    const s = baseScale * mag;
+    const cY = 0, cZ = (minZ+maxZ)/2;
+    const ox = vx + vw/2 + cY * s;
+    const oy = vy + vh/2 + cZ * s;
+    const sx = (y)=>ox - y*s + panX;
+    const sz = (z)=>oy - z*s + panY;
+    const drawRect = (yC, zC, yW, zH, fill, stroke)=>{
+      const x1=sx(yC-yW/2),x2=sx(yC+yW/2),y=sz(zC+zH/2),w=x2-x1,h=sz(zC-zH/2)-y;
+      ctx.fillStyle=fill;ctx.strokeStyle=stroke;ctx.lineWidth=2;
+      ctx.beginPath();ctx.rect(Math.min(x1,x2),y,Math.abs(w),h);ctx.fill();ctx.stroke();
+    };
+
+    ctx.save(); ctx.beginPath(); ctx.rect(vx+1,vy+1,vw-2,vh-2); ctx.clip();
+
+    // Fine 1mm grid
+    const pxPerMM = Math.abs(s);
+    if (pxPerMM >= 0.5 && (maxY-minY) < 5000 && (maxZ-minZ) < 5000) {
+      ctx.strokeStyle='rgba(150,150,180,0.35)';ctx.lineWidth=0.5;
+      ctx.beginPath();
+      for(let y=Math.ceil(minY);y<=Math.floor(maxY);y+=1){const x=sx(y);ctx.moveTo(x,0);ctx.lineTo(x,vh);}
+      ctx.stroke();
+      ctx.beginPath();
+      for(let z=Math.ceil(minZ);z<=Math.floor(maxZ);z+=1){const y=sz(z);ctx.moveTo(0,y);ctx.lineTo(vw,y);}
+      ctx.stroke();
+    }
+
+    // Baseline at Z=0
+    ctx.strokeStyle='rgba(150,150,180,0.6)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(0,sz(0));ctx.lineTo(vw,sz(0));ctx.stroke();ctx.setLineDash([]);
+
+    // Coarse grid
+    ctx.strokeStyle='#1a1a3a';ctx.lineWidth=1;
+    const gs = L/4;
+    for(let y=Math.floor(minY/gs)*gs;y<=Math.ceil(maxY/gs)*gs;y+=gs){ctx.beginPath();ctx.moveTo(sx(y),0);ctx.lineTo(sx(y),vh);ctx.stroke();}
+    const gsZ = 50;
+    for(let z=Math.floor(minZ/gsZ)*gsZ;z<=Math.ceil(maxZ/gsZ)*gsZ;z+=gsZ){ctx.beginPath();ctx.moveTo(0,sz(z));ctx.lineTo(vw,sz(z));ctx.stroke();}
+
+    // A-side / B-side
+    ctx.font='bold 18px Arial';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(200,200,220,0.12)';
+    ctx.textAlign='left';ctx.fillText('A-side',vx+12,vy+vh/2);
+    ctx.textAlign='right';ctx.fillText('B-side',vx+vw-12,vy+vh/2);
+
+    // Robot square at actual inlet position
+    drawRect(inletY-D/2, 0, D, D, 'rgba(79,195,247,0.35)','#4fc3f7');
+    ctx.font='bold 12px Arial';ctx.textAlign='center';ctx.fillStyle='#ccd6f6';
+    ctx.textBaseline='top';ctx.fillText('Robot',sx(inletY-D/2),sz(0)+D/2+6);
+
+    // Green inlet dot when rotated
+    if(Math.abs(r1.t)>0.001){
+      ctx.fillStyle='#66bb6a';
+      ctx.beginPath();ctx.arc(sx(inletY),sz(0),4,0,2*Math.PI);ctx.fill();
+      ctx.font='9px Arial';ctx.fillStyle='#66bb6a';ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText('inlet',sx(inletY),sz(0)-4);
+    }
+
+    // Blue line at Robot inlet edge
+    ctx.strokeStyle='#4fc3f7';ctx.lineWidth=2;ctx.globalAlpha=0.5;
+    ctx.beginPath();ctx.moveTo(sx(inletY),sz(0));ctx.lineTo(sx(inletY),0);ctx.stroke();
+    ctx.globalAlpha=1;
+
+    // nosing inlet square at actual position (relative to DEFAULT)
+    const nosCenter = r2i_y - D/2;
+    drawRect(nosCenter, gap, D, D, 'rgba(255,138,101,0.35)','#ff8a65');
+    ctx.font='bold 12px Arial';ctx.textAlign='center';ctx.fillStyle='#ccd6f6';
+    ctx.textBaseline='top';ctx.fillText('nosing inlet',sx(nosCenter),sz(gap)+D/2+6);
+
+    // Gap line at nosing center (fixed reference)
+    ctx.setLineDash([6,5]);ctx.lineWidth=1;ctx.strokeStyle='#666';ctx.globalAlpha=0.5;
+    ctx.beginPath();ctx.moveTo(sx(r2i_y),sz(-D/2));ctx.lineTo(sx(r2i_y),sz(gap+D/2));ctx.stroke();
+    ctx.globalAlpha=1;ctx.setLineDash([]);
+    ctx.font='11px monospace';ctx.fillStyle='#ffd54f';ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillText('Z間距: '+gap.toFixed(0)+'mm',sx(r2i_y)+8,sz(gap/2));
+
+    // Axis label
+    ctx.fillStyle='#555';ctx.font='11px monospace';ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText('Y (前後 ← +)',vx+vw/2,vy+vh-4);
+
+    ctx.restore();
+  }
+
+  function renderXZPanel(vx, vy, vw, vh) {
+    const margin = 36;
+    const yRange = L * 0.4 + D;
+    const minY = -yRange, maxY = yRange;
+    let minZ = Math.min(-D/2, 0), maxZ = Math.max(gap + D/2, 0);
+    const zPad = L * 0.04;
+    minZ -= zPad; maxZ += zPad;
+    const baseScale = Math.min((vw-2*margin)/(maxY-minY||1), (vh-2*margin)/(maxZ-minZ||1));
+    const s = baseScale * mag;
+    const cY = 0, cZ = (minZ+maxZ)/2;
+    // Non-inverted Y: right = + (A-side), left = - (B-side)
+    const ox = vx + vw/2 - cY * s;
+    const oy = vy + vh/2 + cZ * s;
+    const sx = (y)=>ox + y*s + panX;
+    const sz = (z)=>oy - z*s + panY;
+    const drawRect = (yC, zC, yW, zH, fill, stroke)=>{
+      const x1=sx(yC-yW/2),x2=sx(yC+yW/2),y=sz(zC+zH/2),w=x2-x1,h=sz(zC-zH/2)-y;
+      ctx.fillStyle=fill;ctx.strokeStyle=stroke;ctx.lineWidth=2;
+      ctx.beginPath();ctx.rect(Math.min(x1,x2),y,Math.abs(w),h);ctx.fill();ctx.stroke();
+    };
+
+    ctx.save(); ctx.beginPath(); ctx.rect(vx+1,vy+1,vw-2,vh-2); ctx.clip();
+
+    // Fine 1mm grid
+    const pxPerMM = Math.abs(s);
+    if (pxPerMM >= 0.5 && (maxY-minY) < 5000 && (maxZ-minZ) < 5000) {
+      ctx.strokeStyle='rgba(150,150,180,0.35)';ctx.lineWidth=0.5;
+      ctx.beginPath();
+      for(let y=Math.ceil(minY);y<=Math.floor(maxY);y+=1){const x=sx(y);ctx.moveTo(x,0);ctx.lineTo(x,vh);}
+      ctx.stroke();
+      ctx.beginPath();
+      for(let z=Math.ceil(minZ);z<=Math.floor(maxZ);z+=1){const y=sz(z);ctx.moveTo(0,y);ctx.lineTo(vw,y);}
+      ctx.stroke();
+    }
+
+    // Baseline at Z=0
+    ctx.strokeStyle='rgba(150,150,180,0.6)';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(0,sz(0));ctx.lineTo(vw,sz(0));ctx.stroke();ctx.setLineDash([]);
+
+    // Coarse grid
+    ctx.strokeStyle='#1a1a3a';ctx.lineWidth=1;
+    const gs = L/4;
+    for(let y=Math.floor(minY/gs)*gs;y<=Math.ceil(maxY/gs)*gs;y+=gs){ctx.beginPath();ctx.moveTo(sx(y),0);ctx.lineTo(sx(y),vh);ctx.stroke();}
+    const gsZ = 50;
+    for(let z=Math.floor(minZ/gsZ)*gsZ;z<=Math.ceil(maxZ/gsZ)*gsZ;z+=gsZ){ctx.beginPath();ctx.moveTo(0,sz(z));ctx.lineTo(vw,sz(z));ctx.stroke();}
+
+    // A-side / B-side (flipped: A on right, B on left)
+    ctx.font='bold 18px Arial';ctx.textBaseline='middle';
+    ctx.fillStyle='rgba(200,200,220,0.12)';
+    ctx.textAlign='left';ctx.fillText('B-side',vx+12,vy+vh/2);
+    ctx.textAlign='right';ctx.fillText('A-side',vx+vw-12,vy+vh/2);
+
+    // Robot square at actual inlet position
+    drawRect(inletY-D/2, 0, D, D, 'rgba(79,195,247,0.35)','#4fc3f7');
+    ctx.font='bold 12px Arial';ctx.textAlign='center';ctx.fillStyle='#ccd6f6';
+    ctx.textBaseline='top';ctx.fillText('Robot',sx(inletY-D/2),sz(0)+D/2+6);
+
+    // Green inlet dot when rotated
+    if(Math.abs(r1.t)>0.001){
+      ctx.fillStyle='#66bb6a';
+      ctx.beginPath();ctx.arc(sx(inletY),sz(0),4,0,2*Math.PI);ctx.fill();
+      ctx.font='9px Arial';ctx.fillStyle='#66bb6a';ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillText('inlet',sx(inletY),sz(0)-4);
+    }
+
+    // Blue line at Robot RIGHT edge (inlet Y)
+    ctx.strokeStyle='#4fc3f7';ctx.lineWidth=2;ctx.globalAlpha=0.5;
+    ctx.beginPath();ctx.moveTo(sx(inletY),sz(0));ctx.lineTo(sx(inletY),0);ctx.stroke();
+    ctx.globalAlpha=1;
+
+    // nosing comp square at actual position (relative to DEFAULT)
+    const nosCenter = r2.c - D/2;
+    drawRect(nosCenter, gap, D, D, 'rgba(255,138,101,0.35)','#ff8a65');
+    ctx.font='bold 12px Arial';ctx.textAlign='center';ctx.fillStyle='#ccd6f6';
+    ctx.textBaseline='top';ctx.fillText('nosing comp',sx(nosCenter),sz(gap)+D/2+6);
+
+    // Gap line at nosing comp right edge
+    ctx.setLineDash([6,5]);ctx.lineWidth=1;ctx.strokeStyle='#666';ctx.globalAlpha=0.5;
+    ctx.beginPath();ctx.moveTo(sx(r2.c),sz(-D/2));ctx.lineTo(sx(r2.c),sz(gap+D/2));ctx.stroke();
+    ctx.globalAlpha=1;ctx.setLineDash([]);
+    ctx.font='11px monospace';ctx.fillStyle='#ffd54f';ctx.textAlign='left';ctx.textBaseline='middle';
+    ctx.fillText('Z間距: '+gap.toFixed(0)+'mm',sx(r2.c)+8,sz(gap/2));
+
+    // Axis label
+    ctx.fillStyle='#555';ctx.font='11px monospace';ctx.textAlign='center';ctx.textBaseline='bottom';
+    ctx.fillText('Y (前後 + →)',vx+vw/2,vy+vh-4);
+
+    ctx.restore();
+  }
+}
+
+function compute() {
+  allIds.forEach(id => D[id].value = parseFloat(S[id].value).toFixed(id.includes('turn')?3:1));
+  magDisp.textContent = parseFloat(mag_inp.value).toFixed(1);
+  if (currentTab === 'top') renderTopView();
+  else renderSideView();
+}
+
+// Tab switching
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTab = btn.dataset.tab;
+    document.getElementById('sideParams').classList.toggle('show', currentTab === 'side');
+    document.getElementById('sideParamsGap').classList.toggle('show', currentTab === 'side');
+    legend.style.display = currentTab === 'top' ? '' : 'none';
+    hint.innerHTML = currentTab === 'top'
+      ? '雙擊數字可單項歸零 &middot; &#8593;&#8595; Y(前後) &middot; &#8592;&#8594; X(左右)'
+      : '雙擊數字可單項歸零 &middot; &#8592;(+) Y(前後) &#8594;(-) &middot; &#8593;&#8595; Z(高度)';
+    compute();
+  });
+});
+
+// --- Events ---
+allIds.forEach(id => {
+  S[id].addEventListener('input', () => { D[id].value = S[id].value; compute(); });
+  D[id].addEventListener('input', () => { S[id].value = D[id].value; compute(); });
+  D[id].addEventListener('dblclick', () => { S[id].value = 0; D[id].value = 0; compute(); });
+});
+dia_inp.addEventListener('input', compute);
+gap_inp.addEventListener('input', compute);
+L_inp.addEventListener('input', compute);
+mag_inp.addEventListener('input', compute);
+document.getElementById('resetAllBtn').addEventListener('click', () => {
+  allIds.forEach(id => { S[id].value = 0; D[id].value = 0; }); mag_inp.value = 5; compute();
+});
+document.getElementById('resetRobotBtn').addEventListener('click', () => {
+  r1Ids.forEach(id => { S[id].value = 0; D[id].value = 0; }); compute();
+});
+document.getElementById('resetNosingBtn').addEventListener('click', () => {
+  r2Ids.forEach(id => { S[id].value = 0; D[id].value = 0; }); compute();
+});
+
+setTimeout(resize, 50);
+</script>
+</body>
+</html>
