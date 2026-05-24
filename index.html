@@ -310,6 +310,7 @@ function renderSideView() {
   const r1_cy = r1.f;
   const r2i_y = r2.c + r2.i;
   const inletY = r1_cy + h * sa1;
+  const compY = r1_cy - h * sa1;
   const r1c = { x: -h*ca1, y: r1.f - h*sa1 };
   const r1i = { x: h*ca1, y: r1.f + h*sa1 };
   const r2c = { x: -h, y: r2.c };
@@ -478,12 +479,12 @@ function renderSideView() {
     ctx.textAlign='left';ctx.fillText('B-side',vx+12,vy+vh/2);
     ctx.textAlign='right';ctx.fillText('A-side',vx+vw-12,vy+vh/2);
 
-    // Robot square at actual inlet position
-    drawRect(inletY-D/2, 0, D, D, 'rgba(79,195,247,0.35)','#4fc3f7');
+    // Robot square at actual comp position
+    drawRect(compY-D/2, 0, D, D, 'rgba(79,195,247,0.35)','#4fc3f7');
     ctx.font='bold 12px Arial';ctx.textAlign='center';ctx.fillStyle='#ccd6f6';
-    ctx.textBaseline='top';ctx.fillText('Robot',sx(inletY-D/2),sz(0)+D/2+6);
+    ctx.textBaseline='top';ctx.fillText('Robot',sx(compY-D/2),sz(0)+D/2+6);
 
-    // Green inlet dot when rotated
+    // Green inlet dot when rotated (reference)
     if(Math.abs(r1.t)>0.001){
       ctx.fillStyle='#66bb6a';
       ctx.beginPath();ctx.arc(sx(inletY),sz(0),4,0,2*Math.PI);ctx.fill();
@@ -491,9 +492,9 @@ function renderSideView() {
       ctx.fillText('inlet',sx(inletY),sz(0)-4);
     }
 
-    // Blue line at Robot RIGHT edge (inlet Y)
+    // Blue line at Robot RIGHT edge (comp Y)
     ctx.strokeStyle='#4fc3f7';ctx.lineWidth=2;ctx.globalAlpha=0.5;
-    ctx.beginPath();ctx.moveTo(sx(inletY),sz(0));ctx.lineTo(sx(inletY),0);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(sx(compY),sz(0));ctx.lineTo(sx(compY),0);ctx.stroke();
     ctx.globalAlpha=1;
 
     // nosing comp square at actual position (relative to DEFAULT)
