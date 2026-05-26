@@ -94,6 +94,20 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #
     <div class="param-row"><label>inlet (右Y)</label><input type="range" id="r2inlet" min="-100" max="100" value="0" step="0.1"><input class="val" id="r2inletVal" type="number" step="0.1"></div>
   </div>
 
+  <div class="side-only" id="sideCircleParams" style="background:#1a1a3e;border-radius:8px;padding:10px;border-left:3px solid #ab47bc;flex-direction:column;">
+    <h3 style="font-size:14px;color:#ab47bc;margin-bottom:8px;">MSR Z Offset</h3>
+    <div style="background:#0f3460;border-radius:6px;padding:6px;margin-bottom:6px;">
+      <div style="font-size:11px;color:#4fc3f7;margin-bottom:4px;font-weight:bold;">Inlet</div>
+      <div class="param-row" style="margin-bottom:2px;"><label style="width:30px;font-size:11px;">OP</label><input type="range" id="inletOpZ" min="-300" max="300" value="0" step="0.1"><input class="val" id="inletOpZVal" type="number" step="0.1" style="width:50px;font-size:11px;"></div>
+      <div class="param-row" style="margin-bottom:0;"><label style="width:30px;font-size:11px;">RT</label><input type="range" id="inletRtZ" min="-300" max="300" value="0" step="0.1"><input class="val" id="inletRtZVal" type="number" step="0.1" style="width:50px;font-size:11px;"></div>
+    </div>
+    <div style="background:#0f3460;border-radius:6px;padding:6px;">
+      <div style="font-size:11px;color:#ff8a65;margin-bottom:4px;font-weight:bold;">Comp</div>
+      <div class="param-row" style="margin-bottom:2px;"><label style="width:30px;font-size:11px;">RT</label><input type="range" id="compRtZ" min="-300" max="300" value="0" step="0.1"><input class="val" id="compRtZVal" type="number" step="0.1" style="width:50px;font-size:11px;"></div>
+      <div class="param-row" style="margin-bottom:0;"><label style="width:30px;font-size:11px;">OP</label><input type="range" id="compOpZ" min="-300" max="300" value="0" step="0.1"><input class="val" id="compOpZVal" type="number" step="0.1" style="width:50px;font-size:11px;"></div>
+    </div>
+  </div>
+
   <div class="dist-panel">
     <h3>&#128208; 距離 (Robot - nosing gap)</h3>
     <div class="dist-row"><span class="label">comp Y 分量</span><span class="value" style="color:#4fc3f7;" id="distCompY">0.000 mm</span></div>
@@ -102,6 +116,7 @@ body { font-family: 'Segoe UI', Arial, sans-serif; background: #1a1a2e; color: #
     <div class="dist-row"><span class="label">Inlet玻璃距離nosing gap為</span><span class="value" style="color:#ffd54f;" id="distInletE">0.000 mm</span></div>
   </div>
   <div id="bindingWarn" style="display:none;color:#e94560;font-weight:bold;font-size:18px;text-align:center;padding:10px;background:rgba(233,69,96,0.12);border:3px solid #e94560;border-radius:6px;margin-top:8px;">⚠️ BINDING ⚠️</div>
+  <div id="msrBindingWarn" style="display:none;color:#ff9800;font-weight:bold;font-size:16px;text-align:center;padding:10px;background:rgba(255,152,0,0.12);border:3px solid #ff9800;border-radius:6px;margin-top:4px;">⚠️ MSR BINDING ⚠️</div>
 
   <div class="legend">
     <span class="legend-item"><span class="legend-dot" style="background:#4fc3f7;"></span> Robot</span>
@@ -132,6 +147,8 @@ const r2Ids = ['r2comp','r2inlet'];
 const allIds = r1Ids.concat(r2Ids);
 const S = {}, D = {};
 allIds.forEach(id => { S[id] = document.getElementById(id); D[id] = document.getElementById(id+'Val'); });
+const zIds = ['inletOpZ','inletRtZ','compRtZ','compOpZ'];
+zIds.forEach(id => { S[id] = document.getElementById(id); D[id] = document.getElementById(id+'Val'); });
 const DE = {
   cY: document.getElementById('distCompY'), iY: document.getElementById('distInletY'),
   cE: document.getElementById('distCompE'), iE: document.getElementById('distInletE'),
@@ -143,7 +160,7 @@ const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 let W, H, scale, originX, originY;
 let zoomFocusX = -1, zoomFocusY = -1;
-let panX = 0, panY = 0, panStartX, panStartY, panStartOX, panStartOY;
+let panX = 0, panY = 50, panStartX, panStartY, panStartOX, panStartOY;
 let isPanning = false;
 let currentTab = 'top';
 const dia_inp = document.getElementById('rodDia');
@@ -420,6 +437,16 @@ function renderSideView() {
     ctx.font='11px monospace';ctx.fillStyle='#ffd54f';ctx.textAlign='left';ctx.textBaseline='middle';
     ctx.fillText('Z間距: '+gap.toFixed(0)+'mm',sx(r2i_y)+8,sz(gap/2));
 
+    // Two circles above nosing (fixed Y, not following blue line)
+    const circR = 30;
+    const inletOpOff = +S.inletOpZ.value || 0;
+    const inletRtOff = +S.inletRtZ.value || 0;
+    ctx.fillStyle = 'rgba(200,200,220,0.2)';
+    ctx.strokeStyle = '#8892b0';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(sx(circR-inletOpOff), sz(gap+300), circR*pxPerMM, 0, 2*Math.PI); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(sx(-circR+inletRtOff), sz(gap+300), circR*pxPerMM, 0, 2*Math.PI); ctx.fill(); ctx.stroke();
+
     // Axis label
     ctx.fillStyle='#555';ctx.font='11px monospace';ctx.textAlign='center';ctx.textBaseline='bottom';
     ctx.fillText('Y (前後 ← +)',vx+vw/2,vy+vh-4);
@@ -510,6 +537,16 @@ function renderSideView() {
     ctx.font='11px monospace';ctx.fillStyle='#ffd54f';ctx.textAlign='left';ctx.textBaseline='middle';
     ctx.fillText('Z間距: '+gap.toFixed(0)+'mm',sx(r2.c)+8,sz(gap/2));
 
+    // Two circles above nosing (fixed Y, not following blue line)
+    const circR = 30;
+    const compRtOff = +S.compRtZ.value || 0;
+    const compOpOff = +S.compOpZ.value || 0;
+    ctx.fillStyle = 'rgba(200,200,220,0.2)';
+    ctx.strokeStyle = '#8892b0';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(sx(-circR+compRtOff), sz(gap+300), circR*pxPerMM, 0, 2*Math.PI); ctx.fill(); ctx.stroke();
+    ctx.beginPath(); ctx.arc(sx(circR-compOpOff), sz(gap+300), circR*pxPerMM, 0, 2*Math.PI); ctx.fill(); ctx.stroke();
+
     // Axis label
     ctx.fillStyle='#555';ctx.font='11px monospace';ctx.textAlign='center';ctx.textBaseline='bottom';
     ctx.fillText('Y (前後 + →)',vx+vw/2,vy+vh-4);
@@ -518,10 +555,49 @@ function renderSideView() {
   }
 }
 
+let saveTimer;
+function saveSettings() {
+  const data = {
+    rodLength: L_inp.value, mag: mag_inp.value, rodDia: dia_inp.value, zGap: gap_inp.value,
+    r1fb: S.r1fb.value, r1turn: S.r1turn.value,
+    r2comp: S.r2comp.value, r2inlet: S.r2inlet.value,
+    inletOpZ: S.inletOpZ.value, inletRtZ: S.inletRtZ.value,
+    compRtZ: S.compRtZ.value, compOpZ: S.compOpZ.value,
+  };
+  localStorage.setItem('appSettings', JSON.stringify(data));
+}
+function loadSettings() {
+  const raw = localStorage.getItem('appSettings');
+  if (!raw) return;
+  try {
+    const d = JSON.parse(raw);
+    const map = { rodLength:L_inp, mag:mag_inp, rodDia:dia_inp, zGap:gap_inp,
+      r1fb:S.r1fb, r1turn:S.r1turn, r2comp:S.r2comp, r2inlet:S.r2inlet,
+      inletOpZ:S.inletOpZ, inletRtZ:S.inletRtZ, compRtZ:S.compRtZ, compOpZ:S.compOpZ };
+    Object.keys(map).forEach(k => { if (d[k] !== undefined) map[k].value = d[k]; });
+    allIds.concat(zIds).forEach(id => { D[id].value = parseFloat(S[id].value).toFixed(id.includes('turn')?3:1); });
+  } catch(e) {}
+}
+
 function compute() {
   magDisp.textContent = parseFloat(mag_inp.value).toFixed(1);
   if (currentTab === 'top') renderTopView();
   else renderSideView();
+
+  const L = parseFloat(L_inp.value) || 2864;
+  const h = L / 2;
+  const rf = +S.r1fb.value, rt = +S.r1turn.value;
+  const inletY = rf + h * Math.sin(d2r(rt));
+  const compY = rf - h * Math.sin(d2r(rt));
+  const io = +S.inletOpZ.value || 0, ir = +S.inletRtZ.value || 0;
+  const co = +S.compRtZ.value || 0, cr = +S.compOpZ.value || 0;
+  const R = 30;
+  const msr = Math.abs(inletY - (R-io)) < R || Math.abs(inletY - (-R+ir)) < R ||
+              Math.abs(compY - (-R+co)) < R || Math.abs(compY - (R-cr)) < R;
+  const mw = document.getElementById('msrBindingWarn');
+  mw.style.display = msr ? 'block' : 'none';
+
+  clearTimeout(saveTimer); saveTimer = setTimeout(saveSettings, 200);
 }
 
 // Tab switching
@@ -532,6 +608,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     currentTab = btn.dataset.tab;
     document.getElementById('sideParams').classList.toggle('show', currentTab === 'side');
     document.getElementById('sideParamsGap').classList.toggle('show', currentTab === 'side');
+    document.getElementById('sideCircleParams').classList.toggle('show', currentTab === 'side');
     legend.style.display = currentTab === 'top' ? '' : 'none';
     hint.innerHTML = currentTab === 'top'
       ? '滾輪縮放 &middot; 中鍵平移 &middot; 雙擊圓圈或數字歸零'
@@ -545,6 +622,11 @@ allIds.forEach(id => {
   S[id].addEventListener('input', () => { D[id].value = parseFloat(S[id].value).toFixed(id.includes('turn')?3:1); compute(); });
   D[id].addEventListener('input', () => { S[id].value = D[id].value; compute(); });
   D[id].addEventListener('dblclick', () => { S[id].value = 0; D[id].value = (0).toFixed(id.includes('turn')?3:1); compute(); });
+});
+zIds.forEach(id => {
+  S[id].addEventListener('input', () => { D[id].value = parseFloat(S[id].value).toFixed(1); compute(); });
+  D[id].addEventListener('input', () => { S[id].value = D[id].value; compute(); });
+  D[id].addEventListener('dblclick', () => { S[id].value = 0; D[id].value = '0.0'; compute(); });
 });
 // Double-click canvas circle to reset (compute positions from live data)
 cv.addEventListener('dblclick', (e) => {
@@ -603,7 +685,9 @@ gap_inp.addEventListener('input', compute);
 L_inp.addEventListener('input', compute);
 mag_inp.addEventListener('input', compute);
 document.getElementById('resetAllBtn').addEventListener('click', () => {
-  allIds.forEach(id => { S[id].value = 0; D[id].value = 0; }); mag_inp.value = 5; compute();
+  allIds.forEach(id => { S[id].value = 0; D[id].value = 0; });
+  zIds.forEach(id => { S[id].value = 0; D[id].value = 0; });
+  mag_inp.value = 5; compute();
 });
 document.getElementById('resetRobotBtn').addEventListener('click', () => {
   r1Ids.forEach(id => { S[id].value = 0; D[id].value = 0; }); compute();
@@ -612,18 +696,16 @@ document.getElementById('resetNosingBtn').addEventListener('click', () => {
   r2Ids.forEach(id => { S[id].value = 0; D[id].value = 0; }); compute();
 });
 document.getElementById('resetViewBtn').addEventListener('click', () => {
-  panX = 0; panY = 0; mag_inp.value = 5; compute();
+  panX = 0; panY = 50; mag_inp.value = 5; compute();
 });
 
-// OSW save/load
+// OSW manual save (visual feedback only, auto-saved via compute)
 document.getElementById('saveOswBtn').addEventListener('click', () => {
-  localStorage.setItem('oswValue', L_inp.value);
   L_inp.style.borderColor = '#4caf50';
   setTimeout(() => L_inp.style.borderColor = '', 1500);
 });
-const saved = localStorage.getItem('oswValue');
-if (saved) { L_inp.value = saved; }
 
+loadSettings();
 setTimeout(resize, 50);
 </script>
 </body>
